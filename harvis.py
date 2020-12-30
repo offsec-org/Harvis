@@ -85,6 +85,7 @@ def kill_process_like(command):
     os.system("pkill -f \"ssh -o\"")
 
 def generate_image_from_snapshot(key_gb):
+    key_gb = str(key_gb)
     worked = False
     while worked == False:
         try:
@@ -361,7 +362,7 @@ def config_droplet(type, type_connect,c2_type):
                 print("Redirectors Set")
             if type_connect == 4:
                 print("Setting Temporary C2's")
-                ip = c2_list[type]['ip']
+                ip = temp_c2_list[type]['ip']
                 ssh.connect(ip, username='root', pkey=k)
                 worked = True
                 c2_setup.install_c2(ssh,c2_type)
@@ -389,13 +390,20 @@ def update_operation(domains_brn, c2_brn, redirects_brn, domains_in_use, c2_list
         for i in domains_brn:
             full_message = full_message +"[+] Domain burned: "+i["domains"] +"\n"
             for j in i["blacklist_list"]:
-                full_message = full_message +"\t Caught by: "+j["engine"]+". Reference: "+j["reference"]
+                full_message = full_message +"\t Caught by: "+j["engine"]+". Reference: "+j["reference"] +"\n"
             object_burned = ""
             for k in redirects:
                 if redirects[k]["domain"] == i["domains"]:
                     object_burned = redirects[k]
                     burned_domains.append(redirects[k]["domain"])
-            message_queu["action1"].append({"message":full_message, "droplet":object_burned})
+            message_already_in = False
+            if object_burned:
+                for m in message_queu["action1"]:
+                    if m["droplet"]["ip"] == object_burned["ip"]:
+                        message_already_in = True
+                if message_already_in == False:
+                    message_queu["action1"].append({"message":full_message, "droplet":object_burned})
+                    #avoid adding same message multiple times
 
 
     """
@@ -510,6 +518,10 @@ def damaged_components():
                             redirects[k]["state"] = "pending_kill"
                             first_creation(k, 3)
                             config_droplet(k,3,0)
+
+                            first_creation(k, 4)
+                            config_droplet(k, 4, 0)
+
                             message_queu["action1"].remove(i)
                             message_queu["action7"].append(
                                 {"message": "Temporary Droplet Ready. Pending discard.", "droplet": i})
@@ -529,7 +541,7 @@ def damaged_components():
                     key_list = list(c2_list)
                     component_key = key_list[int(component) - 1]
                     c2_list[component_key]["state"] = "pending_kill"
-                    comp_mod_ip = redirects[component_key]["ip"]
+                    comp_mod_ip = c2_list[component_key]["ip"]
                     first_creation(component_key, 4)
                     config_droplet(component_key, 4, 0)
                     for i in message_queu["action1"][:]:
@@ -543,6 +555,13 @@ def damaged_components():
                     comp_mod_ip = redirects[component_key]["ip"]
                     first_creation(component_key,3)
                     config_droplet(component_key, 3, 0)
+
+                    c2_list[component_key]["state"] = "pending_kill"
+                    c2_mod_ip = c2_list[component_key]["ip"]
+                    first_creation(component_key,4)
+                    config_droplet(component_key,4,0)
+
+
                     for i in message_queu["action1"][:]:
                         if i["droplet"]["ip"] == comp_mod_ip:
                             message_queu["action7"].append({"message":"Temporary Droplet Ready. Pending discard.","droplet":i})
@@ -589,8 +608,9 @@ def discard_components():
                         if redirects[k]["ip"] == i["droplet"]["ip"]:
                             message_queu["action7"].remove(i)
                             del_droplet(redirects[k]["id"])
+                            del_droplet(c2_list[k]["id"])
                             redirects[k] = temp_redirects[k]
-                            temp_redirects[k] = None
+                            temp_redirects[k] = ""
 
                 for i in message_queu["action2"][:]:
                     for k in c2_list:
@@ -598,7 +618,7 @@ def discard_components():
                             message_queu["action7"].remove(i)
                             del_droplet(c2_list[k]["id"])
                             c2_list[k] = temp_c2_list[k]
-                            temp_c2_list[k] = None
+                            temp_c2_list[k] = ""
             else:
                 if int(component) > len(redirects):
 
@@ -625,6 +645,7 @@ def discard_components():
                             message_queu["action7"].remove(i)
 
                     del_droplet(redirects[component_key]["id"])
+                    del_droplet(c2_list[component_key]["id"])
                     redirects[component_key] = temp_redirects[component_key]
                     temp_redirects[component_key] = None
 
@@ -745,32 +766,35 @@ def menu():
         try:
             command = input("Select: ")
             if command == '1':
+                print("0) Back")
                 domain_name = input("Insert domain name: ")
-                result_call = namecheap_handler.buy_domain(domain_name)
-                if result_call == False:
-                    print("[+] Domain not available")
-                else:
-                    print("[+] Domain successfuly acquired")
+                if domain_name.strip() != "0":
+                    result_call = namecheap_handler.buy_domain(domain_name)
+                    if result_call == False:
+                        print("[+] Domain not available")
+                    else:
+                        print("[+] Domain successfuly acquired")
             if command == '2':
                 print("[+] Select Domains to move to a haul: ")
                 actual_domains = set(domains) - set(domains_in_use) - set(burned_domains)
                 if len(actual_domains) > 0:
                     for index, item in enumerate(actual_domains):
                         print(str(index) + ") "+item)
+                    print("1000) Back")
                     domain_option = input("Option: ")
-
-                    for i in domains_types:
-                        if domain_option in i:
-                            print("[-] Domain is already in Haul: "+i)
-                            print("[-] Remove that domain from the haul to allow moving it")
-                        else:
-                            print("Select Haul to move: ")
-                            for j in config.names:
-                                print("[+] "+j)
-                            haul_option = input("Option: ")
-                            actual_domains = list(actual_domains)
-                            domains_types[haul_option].append(actual_domains[int(domain_option)])
-                            domains.remove(actual_domains[int(domain_option)])
+                    if domain_option != "1000":
+                        for i in domains_types:
+                            if domain_option in i:
+                                print("[-] Domain is already in Haul: "+i)
+                                print("[-] Remove that domain from the haul to allow moving it")
+                            else:
+                                print("Select Haul to move: ")
+                                for j in config.names:
+                                    print("[+] "+j)
+                                haul_option = input("Option: ")
+                                actual_domains = list(actual_domains)
+                                domains_types[haul_option].append(actual_domains[int(domain_option)])
+                                domains.remove(actual_domains[int(domain_option)])
                 else:
                     print("[+] No available domains in pool. Buy another domain")
             if command == '3':
@@ -785,18 +809,20 @@ def menu():
                 print("[+] Select Haul")
                 for i in domains_types:
                     print("[+] "+i)
+                print("[+] 1000) Back")
                 haul_option = input("Haul: ")
-                print("[+] Select domain to move priority: ")
-                if bool(domains_types[haul_option]):
-                    for index, item in enumerate(domains_types[haul_option]):
-                        print(str(index) +") "+item)
-                    domain_option = input("Option Number: ")
-                    print("[+] Select position to move the domain [Position 1 = Highest priority]: ")
-                    position_option = input("Position Number: ")
-                    domain_item = domains_types[haul_option].pop(int(domain_option))
-                    domains_types[haul_option].insert(int(position_option)-1, domain_item)
-                else:
-                    print("[-] No domains in haul")
+                if haul_option != "1000":
+                    print("[+] Select domain to move priority: ")
+                    if bool(domains_types[haul_option]):
+                        for index, item in enumerate(domains_types[haul_option]):
+                            print(str(index) +") "+item)
+                        domain_option = input("Option Number: ")
+                        print("[+] Select position to move the domain [Position 1 = Highest priority]: ")
+                        position_option = input("Position Number: ")
+                        domain_item = domains_types[haul_option].pop(int(domain_option))
+                        domains_types[haul_option].insert(int(position_option)-1, domain_item)
+                    else:
+                        print("[-] No domains in haul")
             if command == '5':
                 print("[+] Select print option: ")
                 print("1) All Domains in Pool")
@@ -871,6 +897,9 @@ def restricted_menu():
                     print(f"{bcolors.FAIL}[+] Domain not available{bcolors.ENDC}")
                 else:
                     print(f"{bcolors.OKBLUE}[+] Domain successfuly acquired{bcolors.ENDC}")
+                    temp_domains = list(api.domains_getList())
+                    for i in temp_domains:
+                        domains.append(i['name'])
             if command == '2':
                 print(f"{bcolors.BOLD}[+] Select Domains to move to a haul: {bcolors.ENDC}")
                 actual_domains = set(domains) - set(domains_in_use) - set(burned_domains)
