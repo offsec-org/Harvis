@@ -323,6 +323,8 @@ def config_droplet(type, type_connect,c2_type):
                 c2_setup.install_c2(ssh,c2_type)
                 c2_setup.setup_api(ssh, ip,c2_type)
                 print("API KEY set")
+                print("Setting Certificates")
+                c2_setup.setup_certificate(ssh,type)
                 print("Setting Listener Profile")
                 c2_setup.setup_listener(ip,type,c2_type)
                 print("All Profiles Set")
@@ -395,7 +397,8 @@ def update_operation(domains_brn, c2_brn, redirects_brn, domains_in_use, c2_list
             for k in redirects:
                 if redirects[k]["domain"] == i["domains"]:
                     object_burned = redirects[k]
-                    burned_domains.append(redirects[k]["domain"])
+                    if object_burned not in burned_domains:
+                        burned_domains.append(redirects[k]["domain"])
             message_already_in = False
             if object_burned:
                 for m in message_queu["action1"]:
@@ -610,7 +613,9 @@ def discard_components():
                             del_droplet(redirects[k]["id"])
                             del_droplet(c2_list[k]["id"])
                             redirects[k] = temp_redirects[k]
-                            temp_redirects[k] = ""
+                            c2_list[k] = temp_c2_list[k]
+                            temp_redirects.pop(k, None)
+                            temp_c2_list.pop(k, None)
 
                 for i in message_queu["action2"][:]:
                     for k in c2_list:
@@ -618,7 +623,8 @@ def discard_components():
                             message_queu["action7"].remove(i)
                             del_droplet(c2_list[k]["id"])
                             c2_list[k] = temp_c2_list[k]
-                            temp_c2_list[k] = ""
+                            temp_c2_list.pop(k, None)
+
             else:
                 if int(component) > len(redirects):
 
@@ -632,7 +638,7 @@ def discard_components():
 
                     del_droplet(c2_list[component_key]["id"])
                     c2_list[component_key] = temp_c2_list[component_key]
-                    temp_c2_list[component_key] = None
+                    temp_c2_list.pop(component_key, None)
 
                 else:
 
@@ -647,7 +653,9 @@ def discard_components():
                     del_droplet(redirects[component_key]["id"])
                     del_droplet(c2_list[component_key]["id"])
                     redirects[component_key] = temp_redirects[component_key]
-                    temp_redirects[component_key] = None
+                    c2_list[component_key] = temp_c2_list[component_key]
+                    temp_redirects.pop(component_key, None)
+                    temp_c2_list.pop(component_key, None)
 
                     # get component modified from message_queue
 
